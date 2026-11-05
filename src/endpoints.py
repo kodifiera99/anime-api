@@ -441,7 +441,21 @@ async def get_anime_recommendations(
 
 
 @router.get("/episodes/{anilist_id}")
-async def get_episodes(anilist_id: int):
+async def get_episodes(anilist_id: int, provider: str | None = None):
+
+    # ?provider=<name> answers from that one module — animex returns
+    # clean hasDub/hasSub flags in ~1s where the merged gather waits for
+    # the slowest scraper (20s+ under rot). Used by the gateway's guide
+    # tool for fast dub checks.
+    if provider:
+        import importlib
+        try:
+            mod = importlib.import_module(f"src.providers.{provider}")
+        except Exception as e:
+            raise HTTPException(404, f"no such provider: {provider}") from e
+        data = await mod.get_episodes(int(anilist_id))
+        return proxy_deep_images({"anilistId": int(anilist_id), "source": "native",
+                                  "providers": {provider: data}})
 
     try:
         native = await provider_race.merged_episodes(anilist_id)
